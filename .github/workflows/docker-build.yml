@@ -1,0 +1,57 @@
+permissions:
+  contents: read
+  id-token: "write"
+
+on:
+  push:
+    branches:
+      - main
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  GCLOUD_SERVICE_ACCOUNT: "github-action-sa"
+  GCLOUD_ZONE: "asia-southeast1"
+  GCLOUD_ARTIFACT_REGISTRY: "whale-notification-tg-bot"
+  GCLOUD_IMAGE_NAME: "whale-notification-tg-bot"
+  DOCKER_FILE_PATH: "./Dockerfile"
+
+name: docker-build
+jobs:
+  required:
+    runs-on: ubuntu-latest
+    name: Docker image build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract branch name
+        shell: bash
+        id: extract_branch
+        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+      - name: Extract commit short SHA
+        id: extract_commit_id
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      # Docker build
+      - name: Cache Docker layers
+        uses: actions/cache@v2
+        with:
+          path: /tmp/.buildx-cache
+          # Key is named differently to avoid collision
+          key: ${{ runner.os }}-multi-buildx-${{ steps.extract_branch.outputs.branch }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-multi-buildx-${{ steps.extract_branch.outputs.branch }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: |
+            ${{ env.GCLOUD_ZONE }}-docker.pkg.dev/${{ secrets.GCLOUD_PROJECT_ID }}/${{ env.GCLOUD_ARTIFACT_REGISTRY }}/${{ env.GCLOUD_IMAGE_NAME }}:${{ steps.extract_branch.outputs.branch }}-${{ steps.extract_commit_id.outputs.sha_short }}
+            ${{ env.GCLOUD_ZONE }}-docker.pkg.dev/${{ secrets.GCLOUD_PROJECT_ID }}/${{ env.GCLOUD_ARTIFACT_REGISTRY }}/${{ env.GCLOUD_IMAGE_NAME }}:latest
+          context: .
+          file: ${{ env.DOCKER_FILE_PATH }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
