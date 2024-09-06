@@ -21,6 +21,8 @@
     "ws": "^8.18.0"
   },
   "scripts": {
-    "start": "npx ts-node src/index.ts"
+    "build": "tsc -p .",
+    "start": "npx ts-node src/index.ts",
+    "start-prod": "pnpm run build && node ./dist/src/index.js"
   }
 }
