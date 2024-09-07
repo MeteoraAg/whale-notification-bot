@@ -11,8 +11,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  GCLOUD_WORKLOAD_IDENTITY: "github-action"
+  GCLOUD_WORKLOAD_IDENTITY_PROVIDER: "github-action-provider"
   GCLOUD_SERVICE_ACCOUNT: "github-action-sa"
   GCLOUD_ZONE: "asia-southeast1"
+  GKE_ZONE: "asia-southeast1-b"
   GCLOUD_ARTIFACT_REGISTRY: "whale-notification-tg-bot"
   GCLOUD_IMAGE_NAME: "whale-notification-tg-bot"
   DOCKER_FILE_PATH: "./Dockerfile"
@@ -44,6 +47,21 @@ jobs:
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      # Auth with Gcloud
+      - id: auth
+        uses: "google-github-actions/auth@v2"
+        with:
+          token_format: access_token
+          project_id: ${{ secrets.GCLOUD_PROJECT_ID }}
+          workload_identity_provider: "projects/${{ secrets.GCLOUD_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.GCLOUD_WORKLOAD_IDENTITY }}/providers/${{ env.GCLOUD_WORKLOAD_IDENTITY_PROVIDER}}"
+          service_account: ${{ env.GCLOUD_SERVICE_ACCOUNT }}@${{ secrets.GCLOUD_PROJECT_ID }}.iam.gserviceaccount.com
+          access_token_lifetime: 300s
+      - id: "get-gke-credentials"
+        uses: "google-github-actions/get-gke-credentials@v2"
+        with:
+          cluster_name: ${{ secrets.GKE_CLUSTER }}
+          location: ${{ env.GKE_ZONE }}
+          project_id: ${{ secrets.GCLOUD_PROJECT_ID }}
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
